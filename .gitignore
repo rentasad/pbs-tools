@@ -1,2 +1,5 @@
-*.db
+tape-library.db 
+*.log
+__pycache__/
+*.pyc
 
