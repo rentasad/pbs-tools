@@ -1,0 +1,14 @@
+{
+  "title": "Tape Library Dashboard",
+  "description": "Bandverwaltung PBS1",
+  "databases": {
+    "tape-library": {
+      "tables": {
+        "tape_status": {
+          "title": "Band-Status",
+          "sort_desc": "check_date"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<title>{{ label }}</title>
+<style>
+body { font-family: monospace; background: #1a1a2e; color: #e0e0e0; margin: 0; padding: 20px; }
+h1 { color: #00d4ff; }
+a { color: #00d4ff; }
+table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+th { background: #16213e; padding: 10px; text-align: left; color: #00d4ff; }
+td { padding: 8px 10px; border-bottom: 1px solid #222; font-size: 0.9em; }
+tr:hover td { background: #16213e; }
+.ok { color: #00ff88; }
+.warn { color: #ffaa00; }
+.bad { color: #ff4444; }
+</style>
+</head>
+<body>
+<h1>{{ label }}</h1>
+<a href="/">Zurueck zur Uebersicht</a>
+<table>
+  <tr>
+    <th>Datum</th><th>Wearout</th><th>Passes</th><th>Geschrieben</th>
+    <th>Letzter Mount</th><th>Mounts</th><th>Loads</th>
+    <th>Err recovered</th><th>Err unrecovered</th><th>Status</th>
+  </tr>
+  {% for h in history %}
+  {% set w = h['wearout_pct']|float %}
+  <tr>
+    <td>{{ h['check_date'] }}</td>
+    <td class="{{ 'bad' if w >= 100 else ('warn' if w >= 80 else 'ok') }}">{{ "%.1f"|format(w) }}%</td>
+    <td>{{ h['passes_begin'] }}</td>
+    <td>{{ "%.3f"|format(h['lifetime_written_tib']|float) }} TiB</td>
+    <td>{{ "%.2f"|format(h['last_mount_written_gib']|float) }} GiB</td>
+    <td>{{ h['volume_mounts'] }}</td>
+    <td>{{ h['load_count'] }}</td>
+    <td>{{ h['recovered_read_errors'] }} / {{ h['recovered_write_errors'] }}</td>
+    <td class="{{ 'bad' if (h['unrecovered_read_errors']|int) > 0 else '' }}">
+      {{ h['unrecovered_read_errors'] }} / {{ h['unrecovered_write_errors'] }}
+    </td>
+    <td class="{{ 'ok' if h['status']=='OK' else ('warn' if h['status']=='WARN' else 'bad') }}">{{ h['status'] }}</td>
+  </tr>
+  {% endfor %}
+</table>
+</body>
+</html>

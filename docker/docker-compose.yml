@@ -1,0 +1,9 @@
+services:
+  tape-dashboard:
+    build: .
+    container_name: tape-dashboard
+    ports:
+      - "8080:8080"
+    volumes:
+      - /root/tapeCheck/tape-library.db:/data/tape-library.db:ro
+    restart: unless-stopped
