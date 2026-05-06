@@ -1,0 +1,14 @@
+datastore: backup-primary
+drive: LTO6
+eject_after_backup: true
+groups:
+- vm/500
+- vm/301
+- vm/103
+- vm/109
+- vm/114
+- vm/108
+latest_only: true
+notify_email: it@gustini.de
+pool: LTO6-daily
+schedule: 0 18 * * *

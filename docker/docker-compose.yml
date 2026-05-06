@@ -6,4 +6,5 @@ services:
       - "8080:8080"
     volumes:
       - /root/tapeCheck/tape-library.db:/data/tape-library.db:ro
+      - /root/tapeCheck/backup-config.yml:/config/backup-config.yml:rw
     restart: unless-stopped

@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<title>Backup Konfiguration</title>
+<style>
+body { font-family: monospace; background: #1a1a2e; color: #e0e0e0; margin: 0; padding: 20px; }
+h1 { color: #00d4ff; }
+a { color: #00d4ff; }
+.card { background: #16213e; border-radius: 8px; padding: 20px; max-width: 600px; }
+label { display: block; margin: 12px 0 4px; color: #888; font-size: 0.85em; }
+textarea, input[type=text], input[type=email] {
+  width: 100%; padding: 8px; background: #0f3460; border: 1px solid #333;
+  color: #e0e0e0; border-radius: 4px; font-family: monospace; }
+textarea { height: 160px; }
+.checkbox { display: flex; align-items: center; gap: 8px; margin: 12px 0; }
+input[type=checkbox] { width: 16px; height: 16px; }
+button { margin-top: 20px; padding: 10px 24px; background: #00d4ff;
+  color: #000; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; }
+button:hover { background: #00aad4; }
+.hint { font-size: 0.75em; color: #666; margin-top: 2px; }
+</style>
+</head>
+<body>
+<h1>Backup Konfiguration</h1>
+<a href="/">← Zurück zum Dashboard</a>
+<br><br>
+<div class="card">
+<form method="POST" action="/config/save">
+
+  <label>Zu sichernde VMs / Container (eine pro Zeile):</label>
+  <textarea name="groups">{% for g in config.groups %}{{ g }}
+{% endfor %}</textarea>
+  <div class="hint">Format: vm/100, ct/200, vm/500 ...</div>
+
+  <div class="checkbox">
+    <input type="checkbox" name="latest_only" id="lo"
+      {% if config.latest_only %}checked{% endif %}>
+    <label for="lo" style="margin:0">Nur neueste Snapshots sichern (latest-only)</label>
+  </div>
+
+  <div class="checkbox">
+    <input type="checkbox" name="eject" id="ej"
+      {% if config.eject_after_backup %}checked{% endif %}>
+    <label for="ej" style="margin:0">Band nach Backup auswerfen</label>
+  </div>
+
+  <label>Benachrichtigungs-E-Mail:</label>
+  <input type="email" name="notify_email" value="{{ config.notify_email or '' }}">
+
+  <br>
+  <button type="submit">💾 Speichern</button>
+</form>
+</div>
+</body>
+</html>

@@ -25,7 +25,7 @@ db = sqlite3.connect('/root/tapeCheck/tape-library.db')
 to_check = []
 
 for m in media:
-    label    = m.get('label', '')
+    label    = m.get('label-text', '')
     last_use = m.get('media-set-ctime', m.get('ctime', None))
 
     if not label:

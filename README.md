@@ -15,13 +15,14 @@ Built for an environment with:
 ```
 tapeCheck/
 ├── README.md
-├── tape-library.db              # SQLite database (auto-created)
-├── metadata.json                # Datasette metadata (optional)
+├── tape-library.db              # SQLite database (auto-created, excluded from git)
+├── backup-config.yml            # Backup job configuration (VMs, pool, options)
 │
 ├── check-lto6-tapes.sh          # Interactive LTO6 tape check & labeling
 ├── check-lto8-tapes.sh          # Automated LTO8 tape check (Superloader)
 ├── label-lto8-tapes.sh          # Initial LTO8 format & label (first run)
 ├── lto6-daily-stats.sh          # Daily cron: reads stats from loaded LTO6 tape
+├── lto6-backup-run.sh           # LTO6 tape backup job (reads backup-config.yml)
 ├── lto8-smart-check.sh          # Weekly cron: checks only tapes used since last run
 │
 └── docker/
@@ -31,7 +32,8 @@ tapeCheck/
         ├── app.py               # Flask web application
         └── templates/
             ├── index.html       # Dashboard overview
-            └── tape.html        # Per-tape history view
+            ├── tape.html        # Per-tape history view
+            └── config.html      # Backup configuration editor
 ```
 
 ---
@@ -41,7 +43,7 @@ tapeCheck/
 ### On the PBS host
 
 ```bash
-apt install -y multipath-tools lsscsi mtx sg3-utils sqlite3 python3 docker.io docker-compose-plugin
+apt install -y multipath-tools lsscsi mtx sg3-utils sqlite3 python3 python3-yaml docker.io docker-compose-plugin
 ```
 
 ### Verify tape devices are recognized
@@ -58,7 +60,7 @@ lsscsi -g
 
 ```bash
 proxmox-tape drive create LTO6             --path /dev/st0
-proxmox-tape drive create lto8-superloader --path /dev/st1 \
+proxmox-tape drive create lto8-superloader --path /dev/st1 
   --changer quantum-sl3 --changer-drivenum 0
 proxmox-tape changer create quantum-sl3    --path /dev/sg8
 ```
@@ -182,6 +184,52 @@ FORCE_ALL=all ./lto8-smart-check.sh all
 
 ---
 
+### `lto6-backup-run.sh` – LTO6 Tape Backup Job
+
+Replaces a static PBS tape backup job. Reads `backup-config.yml`, identifies the currently loaded tape, and starts the backup with the configured VM groups and options.
+
+```bash
+./lto6-backup-run.sh
+```
+
+**Workflow:**
+1. Reads `backup-config.yml` for VM groups, pool, latest-only flag
+2. Checks if a tape is loaded → aborts with notification if not
+3. Reads the tape label → loads it explicitly into PBS
+4. Runs `proxmox-tape backup` with all configured options
+5. Ejects the tape on success (if configured)
+
+This approach avoids PBS pre-selecting a specific tape at job start – PBS uses whatever tape is currently in the drive.
+
+> ⚠️ Disable the static PBS tape backup job schedule before using this script to avoid conflicts.
+
+---
+
+## ⚙️ Backup Configuration
+
+All backup job settings are stored in `backup-config.yml`:
+
+```yaml
+datastore: backup-primary
+pool: LTO6-daily
+drive: LTO6
+latest_only: true
+eject_after_backup: true
+notify_email: admin@firma.de
+
+groups:
+  - vm/500    # GSTVMDBS2
+  - vm/301    # DOCKER-SV
+  - vm/103    # PWS
+  - vm/109    # GSTVMSAGE100APP
+  - vm/114    # GSTVMSAGE100DB
+  - vm/108    # SFIRM
+```
+
+The config can be edited directly or via the web dashboard at `http://<PBS-IP>:8080/config`.
+
+---
+
 ## ⏰ Cron Jobs
 
 ```bash
@@ -189,8 +237,11 @@ crontab -e
 ```
 
 ```cron
-# LTO6: daily at 06:00 (reads currently loaded tape)
+# LTO6: daily at 06:00 (reads stats from currently loaded tape)
 0 6 * * * /root/tapeCheck/lto6-daily-stats.sh
+
+# LTO6: daily at 18:00 (runs tape backup job)
+0 18 * * * /root/tapeCheck/lto6-backup-run.sh
 
 # LTO8: every Sunday at 02:00 (smart check, only used tapes)
 0 2 * * 0 /root/tapeCheck/lto8-smart-check.sh
@@ -216,7 +267,10 @@ Access at: `http://<PBS-IP>:8080`
 
 - **Overview page:** all tapes with wearout bar, status badge (OK / WARN / BAD), passes, lifetime written, unrecovered errors, last check date
 - **Detail page:** full history per tape with all metrics across all check dates
+- **Config page** (`/config`): edit backup job settings (VM groups, pool, options) via web form – writes `backup-config.yml`, no direct PBS access
 - Color coding: 🟢 `< 80%` / 🟡 `80–99%` / 🔴 `≥ 100%`
+
+> ⚠️ No authentication – only expose on internal network (port 8080).
 
 ### docker-compose.yml
 
@@ -229,6 +283,7 @@ services:
       - "8080:8080"
     volumes:
       - /root/tapeCheck/tape-library.db:/data/tape-library.db:ro
+      - /root/tapeCheck/backup-config.yml:/config/backup-config.yml:rw
     restart: unless-stopped
 ```
 
@@ -294,7 +349,7 @@ PBS1 (HP ML350 Gen10, 192.168.150.2)
 ├── D2D:     14x 1.92TB SSD RAID5 (~22TB) → PBS Datastore
 ├── LTO8:    IBM Ultrium HH8 in Quantum Superloader 3 (16 slots)
 ├── LTO6:    HP Ultrium 6 standalone (offsite rotation, daily staff swap)
-└── iSCSI:   QNAP NAS 15TB (mobile, offsite rotation)
+└── NFS:     2x QNAP NAS 15TB (mobile, offsite rotation – swapped every few weeks)
 ```
 
 ---
@@ -305,6 +360,9 @@ PBS1 (HP ML350 Gen10, 192.168.150.2)
 - The Quantum Superloader 3 cleaning tape (`CLNU02L1`, slot 16) is automatically excluded from all scripts
 - PBS stores label/pool/catalog data; wearout data is **only available by physically loading the tape**
 - The `lto8-smart-check.sh` compares `media-set-ctime` from PBS media list against the last DB entry to minimize mechanical wear
+- `backup-config.yml` should be committed to git – `tape-library.db` should not (add to `.gitignore`)
+- PBS tape allocation policy `Always` is recommended for manual single-drive LTO6 rotation; the `lto6-backup-run.sh` script avoids the issue of PBS pre-selecting a specific tape at job start
+- The QNAP NAS offsite rotation works best with NFS (`soft` mount + `x-systemd.automount`) so PBS does not hang when the NAS is physically absent
 
 ---
 
@@ -317,3 +375,14 @@ Pull requests welcome. Please test scripts against a non-production tape before 
 ## 📄 License
 
 MIT
+
+---
+
+## 🚫 .gitignore
+
+```
+tape-library.db
+*.log
+__pycache__/
+*.pyc
+```
